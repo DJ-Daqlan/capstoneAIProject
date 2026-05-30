@@ -63,15 +63,22 @@ class JSONEncoder(_json.JSONEncoder):
                 return JSONEncoder.default(self, o)
         """
         if isinstance(o, date):
-            if isinstance(o, datetime) and o.tzinfo:
-                # Convert timezone-aware datetime to UTC before formatting.
-                # Get the UTC offset and subtract it from the datetime to get UTC time.
-                utc_offset = o.utcoffset()
-                if utc_offset:
-                    o = o.replace(tzinfo=None) - utc_offset
-                else:
-                    o = o.replace(tzinfo=None)
+            if isinstance(o, datetime):
+                if o.tzinfo is not None:
+                    # Use the built-in utctimetuple() method which is specifically
+                    # designed for timezone-aware datetimes. It correctly converts
+                    # the local time to UTC by accounting for the UTC offset.
+                    # Reference: https://docs.python.org/3/library/datetime.html#datetime.datetime.utctimetuple
+                    try:
+                        return http_date(o.utctimetuple())
+                    except (ValueError, TypeError, OSError) as e:
+                        # If utctimetuple() fails, raise a more descriptive error
+                        raise TypeError(
+                            'Failed to serialize timezone-aware datetime {!r}: {}'.format(o, e)
+                        )
+                # Timezone-naive datetime: use directly
                 return http_date(o.timetuple())
+            # Date objects (non-datetime): use directly
             return http_date(o.timetuple())
         if isinstance(o, uuid.UUID):
             return str(o)
